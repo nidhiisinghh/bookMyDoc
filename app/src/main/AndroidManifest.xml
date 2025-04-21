@@ -19,7 +19,7 @@
         android:theme="@style/Theme.BookMyDoc"
         tools:targetApi="31">
         <activity
-            android:name=".CityActivity"
+            android:name=".view.CityActivity"
             android:exported="false" />
         <activity
             android:name=".view.SignupActivity"

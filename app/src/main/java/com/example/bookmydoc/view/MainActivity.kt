@@ -3,6 +3,7 @@ package com.example.bookmydoc.view
 import android.content.Intent
 import android.hardware.biometrics.BiometricManager
 import android.os.Bundle
+import android.view.View
 import android.widget.Button
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
@@ -10,60 +11,83 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.ViewModelProvider
 import com.example.bookmydoc.R
+import com.example.bookmydoc.databinding.ActivityMainBinding
+import com.example.bookmydoc.model.Doctor
+import com.example.bookmydoc.viewModel.DoctorAdapter
+import com.example.bookmydoc.viewModel.DoctorViewModel
 import java.util.concurrent.Executor
 
 class MainActivity : AppCompatActivity() {
+    private lateinit var binding: ActivityMainBinding
+    private lateinit var viewModel: DoctorViewModel
+    private lateinit var doctorAdapter: DoctorAdapter
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        setContentView(R.layout.activity_main)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
-        val loginFingerPrint: Button = findViewById(R.id.loginFingerPrintButton)
+        viewModel = ViewModelProvider(this).get(DoctorViewModel::class.java)
 
-        val biometricManager = androidx.biometric.BiometricManager.from(this)
+        setupToolbar()
+        setupRecyclerView()
+        setupSearch()
+        observeViewModel()
+    }
 
-        when(biometricManager.canAuthenticate(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG)){
-            BiometricManager.BIOMETRIC_SUCCESS-> {
-                loginFingerPrint.setOnClickListener {
-                    authenticateUser()
-                }
-            }
-            BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE,
-            BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE,
-            BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE-> {
-                Toast.makeText(this, "Biometric not available", Toast.LENGTH_SHORT).show()
-            }
+    private fun setupToolbar() {
+        setSupportActionBar(binding.toolbar)
+        supportActionBar?.apply {
+            title = "Available Doctors"
+            setDisplayHomeAsUpEnabled(true)
         }
     }
 
-    private fun authenticateUser() {
-        val executor : Executor = ContextCompat.getMainExecutor(this)
-        val biometricPrompt = androidx.biometric.BiometricPrompt(this, executor, object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
-            override fun onAuthenticationSucceeded(result: androidx.biometric.BiometricPrompt.AuthenticationResult) {
-                super.onAuthenticationSucceeded(result)
-                Toast.makeText(applicationContext, "Fingerprint Matched", Toast.LENGTH_LONG).show()
-                startActivity(Intent(applicationContext, LoginActivity::class.java))
-                finish()
+    private fun setupRecyclerView() {
+        doctorAdapter = DoctorAdapter { doctor ->
+            navigateToDoctorDetails(doctor)
+        }
+        binding.doctorRecyclerView.adapter = doctorAdapter
+    }
+
+    private fun setupSearch() {
+        binding.searchEditText.addTextChangedListener { text ->
+            viewModel.filterDoctors(text.toString())
+        }
+    }
+
+    private fun observeViewModel() {
+        viewModel.doctors.observe(this) { doctors ->
+            doctorAdapter.submitList(doctors)
+            binding.emptyState.visibility = if (doctors.isEmpty()) View.VISIBLE else View.GONE
+            binding.doctorRecyclerView.visibility = if (doctors.isEmpty()) View.GONE else View.VISIBLE
+        }
+
+        viewModel.isLoading.observe(this) { isLoading ->
+            binding.progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
+        }
+    }
+
+    private fun navigateToDoctorDetails(doctor: Doctor) {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            putExtra("doctor_id", doctor.id)
+            putExtra("doctor_name", doctor.name)
+            putExtra("doctor_specialization", doctor.specialization)
+            putExtra("doctor_rating", doctor.rating)
+            putExtra("doctor_experience", doctor.experience)
+        }
+        startActivity(intent)
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            android.R.id.home -> {
+                onBackPressed()
+                true
             }
-
-            override fun onAuthenticationFailed() {
-                super.onAuthenticationFailed()
-                Toast.makeText(applicationContext, "Fingerprint NOT Matched", Toast.LENGTH_LONG).show()
-            }
-
-            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                super.onAuthenticationError(errorCode, errString)
-                Toast.makeText(applicationContext, "Clean Sensor/fatal error : $errString", Toast.LENGTH_LONG).show()
-            }
-        })
-
-        val promptInfo = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Biometric Authentication")
-            .setSubtitle("Use fingerprint to open app.")
-            .setNegativeButtonText("Cancel")
-            .build()
-
-        biometricPrompt.authenticate(promptInfo)
+            else -> super.onOptionsItemSelected(item)
+        }
     }
 }
